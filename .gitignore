@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+.local
+LeanFormalizations/
+AUTOLEAN/.venv/
+AUTOLEAN/__pycache__/
+AUTOLEAN/**/__pycache__/
+AUTOLEAN/**/*.pyc
+lean-workspace/.lake/
+lean-workspace/lake-manifest.json
+*.log
+*.egg-info

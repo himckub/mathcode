@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+shell_quote() {
+  printf "'%s'" "${1//\'/\'\"\'\"\'}"
+}
+
+DEFAULT_CLAUDE_CLI_CMD="$(shell_quote "$DIST_DIR/mathcode") -p"
+
+if [[ ! -x "$DIST_DIR/mathcode" ]]; then
+  printf 'MathCode binary is not installed here yet. Run `bash setup.sh` first.\n' >&2
+  exit 1
+fi
+
+if [[ -f "$DIST_DIR/.env" ]]; then
+  set -a
+  source "$DIST_DIR/.env"
+  set +a
+fi
+
+if [[ -d "$DIST_DIR/.local/elan/bin" ]]; then
+  export ELAN_HOME="$DIST_DIR/.local/elan"
+  export PATH="$DIST_DIR/.local/elan/bin:$PATH"
+fi
+
+export AUTOLEAN_DIR="${AUTOLEAN_DIR:-$DIST_DIR/AUTOLEAN}"
+export LEAN_PROJECT_DIR="${LEAN_PROJECT_DIR:-$DIST_DIR/lean-workspace}"
+export CLAUDE_CLI_CMD="${CLAUDE_CLI_CMD:-$DEFAULT_CLAUDE_CLI_CMD}"
+
+exec "$DIST_DIR/mathcode" "$@"
