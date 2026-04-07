@@ -228,7 +228,13 @@ ensure_autolean_venv() {
 
   log "Installing bundled AUTOLEAN Python dependencies"
   "$AUTOLEAN_VENV/bin/python" -m pip install --upgrade pip setuptools wheel
-  "$AUTOLEAN_VENV/bin/python" -m pip install "$AUTOLEAN_DIR"
+
+  local autolean_target="$AUTOLEAN_DIR"
+  if [[ "${MATHCODE_USE_LSP:-}" == "1" ]]; then
+    autolean_target="${AUTOLEAN_DIR}[lsp]"
+    log "MATHCODE_USE_LSP=1 detected — installing with LSP extras"
+  fi
+  "$AUTOLEAN_VENV/bin/python" -m pip install "$autolean_target"
 }
 
 ensure_lean() {
