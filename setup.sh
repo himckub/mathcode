@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RELEASE_REPO="math-ai-org/mathcode"
-RELEASE_TAG="v0.0.2"
+RELEASE_TAG="v0.0.3"
 LOCAL_ELAN_HOME="$ROOT_DIR/.local/elan"
 LOCAL_ELAN_BIN="$LOCAL_ELAN_HOME/bin"
 AUTOLEAN_DIR="$ROOT_DIR/AUTOLEAN"
@@ -106,7 +106,7 @@ verify_release_archive() {
 ensure_mathcode_binary() {
   local binary_path="$ROOT_DIR/mathcode"
 
-  if [[ -x "$binary_path" ]] && "$binary_path" --version >/dev/null 2>&1; then
+  if [[ -x "$binary_path" ]] && "$binary_path" --version >/dev/null 2>&1 && [[ -d "$AUTOLEAN_DIR" ]]; then
     return
   fi
 
@@ -117,7 +117,7 @@ ensure_mathcode_binary() {
   archive_path="$temp_dir/$archive_name"
   checksum_path="$temp_dir/SHA256SUMS.txt"
 
-  log "Downloading MathCode binary from GitHub Releases ($RELEASE_TAG, $(normalize_os)/$(normalize_arch))"
+  log "Downloading MathCode release from GitHub Releases ($RELEASE_TAG, $(normalize_os)/$(normalize_arch))"
   if ! download_release_file "$archive_name" "$archive_path"; then
     rm -rf "$temp_dir"
     exit 1
@@ -135,7 +135,8 @@ ensure_mathcode_binary() {
   LC_ALL=C LANG=C tar -xzf "$archive_path" \
     -C "$ROOT_DIR" \
     --strip-components=1 \
-    "$bundle_name/mathcode"
+    "$bundle_name/mathcode" \
+    "$bundle_name/AUTOLEAN"
   chmod +x "$binary_path"
 
   if ! "$binary_path" --version >/dev/null 2>&1; then
@@ -145,7 +146,7 @@ ensure_mathcode_binary() {
   fi
 
   rm -rf "$temp_dir"
-  log "Installed MathCode binary: $binary_path"
+  log "Installed MathCode binary and AUTOLEAN pipeline"
 }
 
 available_kb() {
