@@ -39,6 +39,16 @@ codex auth login
 - 安装内置 AUTOLEAN 的 Python 虚拟环境
 - 在本机缺少 `lean` / `lake` 时完成 Lean 初始化
 
+可选维护命令：
+
+```bash
+bash setup.sh --status   # 检查二进制和依赖是否健康
+bash setup.sh --clean    # 删除安装产物，但保留证明结果和 vault 数据
+bash setup.sh --help     # 查看全部 setup 参数
+```
+
+`bash setup.sh --clean` 会保留 `LeanFormalizations/` 和 `ObsidianVault/` 里的用户输出。
+
 ## 环境要求
 
 - macOS (arm64) 或 Linux (x86_64)

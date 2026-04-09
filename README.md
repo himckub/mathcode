@@ -39,6 +39,16 @@ What `setup.sh` does:
 - installs the bundled AUTOLEAN Python environment
 - bootstraps Lean locally when `lean` / `lake` are missing
 
+Optional maintenance commands:
+
+```bash
+bash setup.sh --status   # check whether the binary/tooling look healthy
+bash setup.sh --clean    # remove install artifacts, keep proofs/vault data
+bash setup.sh --help     # show all setup flags
+```
+
+`bash setup.sh --clean` preserves user outputs in `LeanFormalizations/` and `ObsidianVault/`.
+
 ## Requirements
 
 - macOS (arm64) or Linux (x86_64)

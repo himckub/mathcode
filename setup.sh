@@ -49,8 +49,8 @@ the Mathlib cache.
 
 Options:
   --help     Show this help message and exit
-  --clean    Remove all generated artifacts (binary, venv, Lean toolchain,
-             .env, caches) and exit. The repo source files are kept.
+  --clean    Remove install artifacts (binary, venv, Lean toolchain,
+             .env, caches) and exit. User outputs are kept.
   --status   Show what is currently installed and exit
 
 Environment variables:
@@ -60,12 +60,12 @@ Environment variables:
 Examples:
   bash setup.sh            # full install
   bash setup.sh --status   # check installation state
-  bash setup.sh --clean    # remove everything setup.sh created
+  bash setup.sh --clean    # remove install artifacts, keep proofs/vaults
 EOF
 }
 
 do_clean() {
-  log "Cleaning MathCode artifacts from $ROOT_DIR …"
+  log "Cleaning MathCode install artifacts from $ROOT_DIR ..."
   rm -f  "$ROOT_DIR/mathcode"
   rm -rf "$AUTOLEAN_DIR"
   rm -rf "$LOCAL_ELAN_HOME"
@@ -74,8 +74,7 @@ do_clean() {
   rm -rf "$LEAN_WORKSPACE_DIR/.lake"
   rm -rf "$LEAN_WORKSPACE_DIR/lake-packages"
   rm -rf "$LEAN_WORKSPACE_DIR/build"
-  rm -rf "$ROOT_DIR/LeanFormalizations"
-  rm -rf "$ROOT_DIR/ObsidianVault"
+  log "Kept user outputs in LeanFormalizations/ and ObsidianVault/."
   log "Done. Run 'bash setup.sh' to reinstall."
 }
 
@@ -83,17 +82,29 @@ do_status() {
   log "MathCode installation status ($ROOT_DIR)"
   log "──────────────────────────────────────────"
   if [[ -x "$ROOT_DIR/mathcode" ]]; then
-    log "Binary:       installed ($( "$ROOT_DIR/mathcode" --version 2>/dev/null || echo 'unknown version' ))"
+    local binary_version
+    if binary_version="$("$ROOT_DIR/mathcode" --version 2>/dev/null)"; then
+      log "Binary:       installed ($binary_version)"
+    else
+      log "Binary:       present but broken"
+    fi
   else
     log "Binary:       not installed"
   fi
   if [[ -x "$AUTOLEAN_VENV/bin/python" ]]; then
-    log "AUTOLEAN venv: installed ($("$AUTOLEAN_VENV/bin/python" --version 2>/dev/null))"
+    local python_version
+    if python_version="$("$AUTOLEAN_VENV/bin/python" --version 2>/dev/null)"; then
+      log "AUTOLEAN venv: installed ($python_version)"
+    else
+      log "AUTOLEAN venv: present but broken"
+    fi
   else
     log "AUTOLEAN venv: not installed"
   fi
-  if have_command lean 2>/dev/null || [[ -x "$LOCAL_ELAN_BIN/lean" ]]; then
+  if { have_command lean && have_command lake; } || [[ -x "$LOCAL_ELAN_BIN/lean" && -x "$LOCAL_ELAN_BIN/lake" ]]; then
     log "Lean:         installed"
+  elif have_command lean || have_command lake || [[ -x "$LOCAL_ELAN_BIN/lean" ]] || [[ -x "$LOCAL_ELAN_BIN/lake" ]]; then
+    log "Lean:         incomplete (need both lean and lake)"
   else
     log "Lean:         not installed"
   fi
@@ -178,14 +189,9 @@ download_release_file() {
   if ! curl -fL --retry 3 --retry-delay 1 -o "$output_path" "$url"; then
     log "Failed to download $url"
     log ""
-    log "The $RELEASE_TAG release does not include a binary for $(normalize_os)/$(normalize_arch)."
-    log "Available assets can be checked at:"
+    log "Check network connectivity and confirm the asset exists at:"
     log "  https://github.com/$RELEASE_REPO/releases/tag/$RELEASE_TAG"
-    log ""
-    if [[ "$(normalize_os)" == "linux" ]]; then
-      log "Linux support is tracked in: https://github.com/$RELEASE_REPO/issues/6"
-    fi
-    exit 1
+    return 1
   fi
 }
 
@@ -227,6 +233,9 @@ ensure_mathcode_binary() {
 
   log "Downloading MathCode release from GitHub Releases ($RELEASE_TAG, $(normalize_os)/$(normalize_arch))"
   if ! download_release_file "$archive_name" "$archive_path"; then
+    if [[ "$(normalize_os)" == "linux" ]]; then
+      log "Linux support is tracked in: https://github.com/$RELEASE_REPO/issues/6"
+    fi
     rm -rf "$temp_dir"
     exit 1
   fi
