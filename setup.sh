@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RELEASE_REPO="math-ai-org/mathcode"
-RELEASE_TAG="v0.0.3"
+RELEASE_TAG="v0.1.0"
 LOCAL_ELAN_HOME="$ROOT_DIR/.local/elan"
 LOCAL_ELAN_BIN="$LOCAL_ELAN_HOME/bin"
 LEAN_WORKSPACE_DIR="$ROOT_DIR/lean-workspace"
