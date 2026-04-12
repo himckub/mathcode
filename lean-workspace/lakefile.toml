@@ -13,3 +13,15 @@ scope = "leanprover-community"
 
 [[lean_lib]]
 name = "MathCodeLean"
+
+# Theorem library mode (PROJECT.md "Theorem Library Mode") — auto-managed
+# user vault libraries. Each vault gets its own subdirectory under
+# VaultLibs/<VaultName>TheoremLib/Stored.lean. Lake derives module names
+# from paths relative to srcDir, so a file at
+# VaultLibs/MyProofsTheoremLib/Stored.lean has module name
+# MyProofsTheoremLib.Stored, and the user-facing import statement is the
+# clean form `import MyProofsTheoremLib.Stored` — the VaultLibs subdirectory
+# does NOT appear at the call site.
+[[lean_lib]]
+name = "UserVaultLibs"
+srcDir = "VaultLibs"

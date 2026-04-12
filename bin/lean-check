@@ -1,0 +1,45 @@
+#!/usr/bin/env bun
+/**
+ * Fast Lean compile checker backed by the persistent REPL.
+ *
+ * Usage: lean-check <file.lean>
+ *
+ * When MATHCODE_LEAN_REPL=1, uses the persistent Lean LSP server for
+ * sub-second compile checks. Falls back to `lake env lean` otherwise.
+ *
+ * Designed to be used by the agent-mode prover instead of raw
+ * `lake env lean` for dramatically faster iteration.
+ */
+const file = process.argv[2]
+if (!file) {
+  console.error('Usage: lean-check <file.lean>')
+  process.exit(1)
+}
+
+const { resolve } = await import('node:path')
+const absFile = resolve(file)
+
+try {
+  const { getRepl } = await import('../src/autolean/leanRepl.js')
+  const repl = await getRepl()
+  if (repl) {
+    const { ok, log } = await repl.compileFile(absFile)
+    if (!ok) {
+      console.error(log)
+      process.exit(1)
+    }
+    console.log('ok')
+    process.exit(0)
+  }
+} catch {
+  // REPL not available — fall through
+}
+
+// Fallback: lake env lean
+const leanProjectDir = process.env.LEAN_PROJECT_DIR || resolve(process.cwd(), 'lean-workspace')
+const proc = Bun.spawn(['lake', 'env', 'lean', absFile], {
+  cwd: leanProjectDir,
+  stdout: 'inherit',
+  stderr: 'inherit',
+})
+process.exit(await proc.exited)

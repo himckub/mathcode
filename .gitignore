@@ -1,16 +1,9 @@
 .env
 .env.*
 !.env.example
-.bun/
 .DS_Store
 .local
-dist/
 LeanFormalizations/
-node_modules/
-AUTOLEAN/.venv/
-AUTOLEAN/__pycache__/
-AUTOLEAN/**/__pycache__/
-AUTOLEAN/**/*.pyc
 lean-workspace/.lake/
 lean-workspace/lake-manifest.json
 *.log
