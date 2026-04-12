@@ -1,45 +1,51 @@
-#!/usr/bin/env bun
-/**
- * Fast Lean compile checker backed by the persistent REPL.
- *
- * Usage: lean-check <file.lean>
- *
- * When MATHCODE_LEAN_REPL=1, uses the persistent Lean LSP server for
- * sub-second compile checks. Falls back to `lake env lean` otherwise.
- *
- * Designed to be used by the agent-mode prover instead of raw
- * `lake env lean` for dramatically faster iteration.
- */
-const file = process.argv[2]
-if (!file) {
-  console.error('Usage: lean-check <file.lean>')
-  process.exit(1)
-}
+#!/usr/bin/env bash
+# Fast Lean compile checker backed by the persistent REPL.
+#
+# Usage: lean-check <file.lean>
+#
+# Routes through `mathcode --compile-check` which uses the persistent
+# Lean REPL for sub-second checks. Falls back to `lake env lean` if
+# mathcode is not available.
+set -euo pipefail
 
-const { resolve } = await import('node:path')
-const absFile = resolve(file)
+FILE="${1:-}"
+if [[ -z "$FILE" ]]; then
+  echo "Usage: lean-check <file.lean>" >&2
+  exit 1
+fi
 
-try {
-  const { getRepl } = await import('../src/autolean/leanRepl.js')
-  const repl = await getRepl()
-  if (repl) {
-    const { ok, log } = await repl.compileFile(absFile)
-    if (!ok) {
-      console.error(log)
-      process.exit(1)
-    }
-    console.log('ok')
-    process.exit(0)
-  }
-} catch {
-  // REPL not available — fall through
-}
+# Resolve FILE to an absolute path relative to the caller's cwd, before any
+# downstream (e.g. bin/mathcode) changes directory. The -- delimiter keeps
+# dirname/basename from treating hyphen-prefixed filenames as options, and
+# ${ABS_DIR%/} strips a trailing slash so files in / don't become //foo.
+if [[ ! -e "$FILE" ]]; then
+  echo "lean-check: file not found: $FILE" >&2
+  exit 1
+fi
+ABS_DIR="$(cd -- "$(dirname -- "$FILE")" && pwd)"
+ABS_FILE="${ABS_DIR%/}/$(basename -- "$FILE")"
 
-// Fallback: lake env lean
-const leanProjectDir = process.env.LEAN_PROJECT_DIR || resolve(process.cwd(), 'lean-workspace')
-const proc = Bun.spawn(['lake', 'env', 'lean', absFile], {
-  cwd: leanProjectDir,
-  stdout: 'inherit',
-  stderr: 'inherit',
-})
-process.exit(await proc.exited)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+# Try mathcode --compile-check (uses REPL, works in both source and binary mode)
+MATHCODE=""
+if [[ -x "$ROOT_DIR/mathcode" ]]; then
+  MATHCODE="$ROOT_DIR/mathcode"
+elif [[ -x "$SCRIPT_DIR/mathcode" ]]; then
+  MATHCODE="$SCRIPT_DIR/mathcode"
+fi
+
+if [[ -n "$MATHCODE" ]]; then
+  exec "$MATHCODE" --compile-check "$ABS_FILE"
+fi
+
+# Source mode: try bun directly
+if command -v bun &>/dev/null && [[ -f "$ROOT_DIR/src/entrypoints/cli.tsx" ]]; then
+  exec bun "$ROOT_DIR/src/entrypoints/cli.tsx" --compile-check "$ABS_FILE"
+fi
+
+# Fallback: lake env lean (slow, no REPL). Must run from a Lake project dir.
+LEAN_PROJECT_DIR="${LEAN_PROJECT_DIR:-$ROOT_DIR/lean-workspace}"
+cd -- "$LEAN_PROJECT_DIR"
+exec lake env lean "$ABS_FILE"
