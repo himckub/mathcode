@@ -15,8 +15,8 @@ Ensures a proof doesn't secretly introduce global axioms to close goals.
 Also checks for `sorry` and `admit` that might have survived.
 
 Usage:
-    python3 Tools/axiom_checker.py LeanFormalizations/problem_foo_proven.lean
-    python3 Tools/axiom_checker.py LeanFormalizations/  # scan directory
+    python3 tools/axiom_checker.py LeanFormalizations/problem_foo_proven.lean
+    python3 tools/axiom_checker.py LeanFormalizations/  # scan directory
 """
 from __future__ import annotations
 
@@ -25,25 +25,37 @@ import re
 import sys
 from pathlib import Path
 
+from _lean_masking import mask_lean_comments_and_strings
 
+
+_ATTR_FRAGMENT = r"(?:@\[(?:[^\]\[]|\[[^\]]*\])*\]\s*)*"
+_DECL_NAME = r"([^\s:({\[]+)"
+_PLACEHOLDER_RE = r"(?<![\w'])(sorry|admit)(?![\w'])"
 _FORBIDDEN_RE = re.compile(
-    r"^\s*(?:axiom|constant|postulate)\s+(\S+)",
+    rf"^\s*{_ATTR_FRAGMENT}(?:(?:private|protected|noncomputable|local|unsafe|partial)\s+)*"
+    rf"(?:axiom|constant|postulate)\s+{_DECL_NAME}",
     re.MULTILINE,
 )
-_SORRY_RE = re.compile(r"\b(sorry|admit)\b")
+_SORRY_RE = re.compile(_PLACEHOLDER_RE)
 _NONCOMPUTABLE_RE = re.compile(
-    r"^\s*noncomputable\s+(?:def|instance)\s+(\S+)",
+    rf"^\s*{_ATTR_FRAGMENT}(?:(?:private|protected|local|unsafe|partial)\s+)*"
+    r"noncomputable\s+"
+    rf"{_ATTR_FRAGMENT}(?:(?:private|protected|local|unsafe|partial)\s+)*"
+    rf"(?:def|instance)\s+{_DECL_NAME}",
     re.MULTILINE,
 )
+
+
+def iter_lean_files(directory: Path):
+    """Yield Lean files recursively, matching the suffix case-insensitively."""
+    for path in directory.rglob("*"):
+        if path.is_file() and path.suffix.lower() == ".lean":
+            yield path
 
 
 def check_file(path: Path) -> dict:
     """Check a single file for forbidden content."""
-    raw_text = path.read_text(encoding="utf-8")
-    # Strip line comments so `-- sorry` or `-- axiom` in comments
-    # don't trigger false positives. Block comments (/- ... -/) are
-    # left for now — they rarely contain forbidden keywords at BOL.
-    text = re.sub(r"--.*$", "", raw_text, flags=re.MULTILINE)
+    text = mask_lean_comments_and_strings(path.read_text(encoding="utf-8"))
 
     # Pre-calculate line offsets for O(n) line-number lookup
     # instead of O(n²) from repeated text[:pos].count("\n").
@@ -104,19 +116,30 @@ def check_file(path: Path) -> dict:
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: python3 Tools/axiom_checker.py <file_or_dir>", file=sys.stderr)
+        print("Usage: python3 tools/axiom_checker.py <file_or_dir>", file=sys.stderr)
         return 1
 
     target = Path(sys.argv[1])
 
     if target.is_file():
-        result = check_file(target)
+        if target.suffix.lower() != ".lean":
+            print(f"Error: {target} is not a .lean file", file=sys.stderr)
+            return 1
+        try:
+            result = check_file(target)
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"Error: failed to read {target}: {exc}", file=sys.stderr)
+            return 1
         print(json.dumps(result, indent=2))
         return 0 if result["clean"] else 1
     elif target.is_dir():
         dirty = 0
-        for f in sorted(target.rglob("*.lean")):
-            r = check_file(f)
+        for f in sorted(iter_lean_files(target)):
+            try:
+                r = check_file(f)
+            except (OSError, UnicodeDecodeError) as exc:
+                print(f"Error: failed to read {f}: {exc}", file=sys.stderr)
+                return 1
             if not r["clean"]:
                 print(json.dumps(r, indent=2))
                 dirty += 1

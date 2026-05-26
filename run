@@ -4,15 +4,12 @@ set -euo pipefail
 DIST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 shell_quote() {
-  printf "'%s'" "${1//\'/\'\"\'\"\'}"
+  printf "'"
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
+  printf "'"
 }
 
 DEFAULT_MATHCODE_CLI_CMD="$(shell_quote "$DIST_DIR/mathcode") -p"
-
-if [[ ! -x "$DIST_DIR/mathcode" ]]; then
-  printf 'MathCode binary is not installed here yet. Run `bash setup.sh` first.\n' >&2
-  exit 1
-fi
 
 if [[ -f "$DIST_DIR/.env" ]]; then
   set -a
@@ -20,12 +17,45 @@ if [[ -f "$DIST_DIR/.env" ]]; then
   set +a
 fi
 
-if [[ -d "$DIST_DIR/.local/elan/bin" ]]; then
+is_executable_file() {
+  [[ -f "$1" && -x "$1" ]]
+}
+
+local_elan_tool_path() {
+  local tool="$1"
+  local elan_bin="$DIST_DIR/.local/elan/bin"
+  if is_executable_file "$elan_bin/$tool"; then
+    printf '%s\n' "$elan_bin/$tool"
+    return 0
+  fi
+  if is_executable_file "$elan_bin/$tool.exe"; then
+    printf '%s\n' "$elan_bin/$tool.exe"
+    return 0
+  fi
+  return 1
+}
+
+if local_elan_tool_path lean >/dev/null && local_elan_tool_path lake >/dev/null; then
   export ELAN_HOME="$DIST_DIR/.local/elan"
   export PATH="$DIST_DIR/.local/elan/bin:$PATH"
 fi
 
 export LEAN_PROJECT_DIR="${LEAN_PROJECT_DIR:-$DIST_DIR/lean-workspace}"
 export MATHCODE_CLI_CMD="${MATHCODE_CLI_CMD:-$DEFAULT_MATHCODE_CLI_CMD}"
+
+if [[ "${1:-}" == "webui" || "${1:-}" == "--webui" ]]; then
+  shift
+  if [[ ! -x "$DIST_DIR/mathcode-webui" ]]; then
+    printf 'MathCode WebUI binary is not installed here yet. Run `bash setup.sh` first.\n' >&2
+    exit 1
+  fi
+  export MATHCODE_WEBUI_ENV_LOADED=1
+  exec "$DIST_DIR/mathcode-webui" "$@"
+fi
+
+if [[ ! -x "$DIST_DIR/mathcode" ]]; then
+  printf 'MathCode binary is not installed here yet. Run `bash setup.sh` first.\n' >&2
+  exit 1
+fi
 
 exec "$DIST_DIR/mathcode" "$@"

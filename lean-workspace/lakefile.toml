@@ -1,5 +1,5 @@
 name = "MathCodeLean"
-version = "0.1.0"
+version = "0.2.0"
 keywords = ["math", "formalization"]
 defaultTargets = ["MathCodeLean"]
 
@@ -14,7 +14,7 @@ scope = "leanprover-community"
 [[lean_lib]]
 name = "MathCodeLean"
 
-# Theorem library mode (PROJECT.md "Theorem Library Mode") — auto-managed
+# Theorem library mode — auto-managed
 # user vault libraries. Each vault gets its own subdirectory under
 # VaultLibs/<VaultName>TheoremLib/Stored.lean. Lake derives module names
 # from paths relative to srcDir, so a file at

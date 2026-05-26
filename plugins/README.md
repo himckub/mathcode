@@ -16,8 +16,6 @@ plugins/
     .mcp.json            # Optional: MCP tool servers
 ```
 
-Note: `.claude-plugin/` is also supported for compatibility with upstream Claude Code plugins.
-
 ## Minimal plugin.json
 
 ```json

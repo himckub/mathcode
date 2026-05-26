@@ -16,8 +16,8 @@ locations, surrounding context, and the theorem they belong to. Useful
 for understanding what remains to be proved before attempting a proof.
 
 Usage:
-    python3 Tools/sorry_analyzer.py LeanFormalizations/problem_foo.lean
-    python3 Tools/sorry_analyzer.py LeanFormalizations/  # scan entire directory
+    python3 tools/sorry_analyzer.py LeanFormalizations/problem_foo.lean
+    python3 tools/sorry_analyzer.py LeanFormalizations/  # scan entire directory
 
 Output format (JSON):
     {
@@ -42,33 +42,45 @@ import re
 import sys
 from pathlib import Path
 
+from _lean_masking import mask_lean_comments_and_strings
 
-_SORRY_RE = re.compile(r"\b(sorry|admit)\b")
+
+_ATTR_FRAGMENT = r"(?:@\[(?:[^\]\[]|\[[^\]]*\])*\]\s*)*"
+_DECL_NAME = r"([^\s:({\[]+)"
+_SORRY_RE = re.compile(r"(?<![\w'])(sorry|admit)(?![\w'])")
 _THEOREM_RE = re.compile(
-    r"^\s*(?:noncomputable\s+)?(?:protected\s+)?(?:private\s+)?"
-    r"(?:theorem|lemma|def|instance)\s+([A-Za-z_][A-Za-z0-9_'.]*)",
+    rf"^\s*{_ATTR_FRAGMENT}(?:(?:private|protected|noncomputable|local|unsafe|partial)\s+)*"
+    rf"(?:(?:theorem|lemma|def|instance)\s+{_DECL_NAME}|(example)\b)",
     re.MULTILINE,
 )
+
+
+def iter_lean_files(directory: Path):
+    """Yield Lean files recursively, matching the suffix case-insensitively."""
+    for path in directory.rglob("*"):
+        if path.is_file() and path.suffix.lower() == ".lean":
+            yield path
 
 
 def analyze_file(path: Path) -> dict:
     """Analyze a single .lean file for sorry/admit tokens."""
     text = path.read_text(encoding="utf-8")
+    searchable_text = mask_lean_comments_and_strings(text)
     lines = text.splitlines()
 
     # Find all theorem/def declarations and their line numbers
     decl_ranges: list[tuple[int, str]] = []
-    for match in _THEOREM_RE.finditer(text):
-        line_no = text[:match.start()].count("\n") + 1
-        decl_ranges.append((line_no, match.group(1)))
+    for match in _THEOREM_RE.finditer(searchable_text):
+        line_no = searchable_text[:match.start()].count("\n") + 1
+        decl_ranges.append((line_no, match.group(1) or match.group(2)))
 
     locations: list[dict] = []
     sorry_count = 0
     admit_count = 0
 
-    for match in _SORRY_RE.finditer(text):
-        line_no = text[:match.start()].count("\n") + 1
-        col = match.start() - text.rfind("\n", 0, match.start()) - 1
+    for match in _SORRY_RE.finditer(searchable_text):
+        line_no = searchable_text[:match.start()].count("\n") + 1
+        col = match.start() - searchable_text.rfind("\n", 0, match.start()) - 1
         token = match.group(1)
 
         if token == "sorry":
@@ -107,20 +119,31 @@ def analyze_file(path: Path) -> dict:
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: python3 Tools/sorry_analyzer.py <file_or_dir>", file=sys.stderr)
+        print("Usage: python3 tools/sorry_analyzer.py <file_or_dir>", file=sys.stderr)
         return 1
 
     target = Path(sys.argv[1])
 
     if target.is_file():
-        result = analyze_file(target)
+        if target.suffix.lower() != ".lean":
+            print(f"Error: {target} is not a .lean file", file=sys.stderr)
+            return 1
+        try:
+            result = analyze_file(target)
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"Error: failed to read {target}: {exc}", file=sys.stderr)
+            return 1
         print(json.dumps(result, indent=2))
     elif target.is_dir():
         results = []
         total_sorry = 0
         total_admit = 0
-        for lean_file in sorted(target.rglob("*.lean")):
-            r = analyze_file(lean_file)
+        for lean_file in sorted(iter_lean_files(target)):
+            try:
+                r = analyze_file(lean_file)
+            except (OSError, UnicodeDecodeError) as exc:
+                print(f"Error: failed to read {lean_file}: {exc}", file=sys.stderr)
+                return 1
             if r["total_placeholders"] > 0:
                 results.append(r)
                 total_sorry += r["sorry_count"]
